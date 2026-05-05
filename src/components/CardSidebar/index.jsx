@@ -1,7 +1,8 @@
 import React from 'react';
-import { Layout, Button, Card, Modal, Spin, Pagination } from 'antd';
-import { DeleteOutlined } from '@ant-design/icons';
+import { Layout, Button, Card, Modal, Spin, Pagination, Tag } from 'antd';
+import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import AtomSpinner from '../AtomSpinner/Atom';
+import { formatDuration } from '../../utils/mapHelpers';
 
 const { Sider } = Layout;
 
@@ -18,8 +19,44 @@ const CardSidebar = ({
   onPageChange,
   onPageSizeChange,
   onUploadClick,
+  stats,
+  statsLoading,
+  detectLoading,
+  onDetectClick,
 }) => (
   <Sider width={350} style={{ background: '#fff', overflow: 'auto' }}>
+    <div
+      style={{
+        margin: '12px 12px 8px',
+        padding: '10px 10px',
+        background: '#fafafa',
+        border: '1px solid #f0f0f0',
+        borderRadius: 8,
+      }}
+    >
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Сводка</div>
+      <div style={{ display: 'grid', rowGap: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ color: '#595959' }}>Всего проектов</span>
+          <span style={{ fontWeight: 600 }}>
+            {statsLoading ? <Spin size="small" /> : stats.totalProjects}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ color: '#595959' }}>Среднее время разбивки</span>
+          <span style={{ fontWeight: 600 }}>
+            {statsLoading ? <Spin size="small" /> : formatDuration(stats.avgTileBuildMs)}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ color: '#595959' }}>Среднее время предразметки</span>
+          <span style={{ fontWeight: 600 }}>
+            {statsLoading ? <Spin size="small" /> : formatDuration(stats.avgDetectMs)}
+          </span>
+        </div>
+      </div>
+    </div>
+
     <Button type="primary" onClick={onUploadClick} style={{ margin: '16px' }}>
       + Загрузить изображение
     </Button>
@@ -96,16 +133,6 @@ const CardSidebar = ({
               maxWidth: '300px',
             }}
             onClick={() => onCardClick(card.uuid)}
-            actions={[
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // message.info('Отправление на предразметку пока не подключено');
-                }}
-              >
-                Отправить на предразметку
-              </Button>,
-            ]}
           >
             {/* Блок с превью */}
             <div style={{ flex: 1, overflow: 'hidden', marginBottom: 12, position: 'relative' }}>
@@ -145,7 +172,28 @@ const CardSidebar = ({
             <p>Формат: {card.format}</p>
             <p>Размер: {card.size}</p>
             <p>Размеры: {card.dimensions}</p>
-            <p>Статус: {card.status}</p>
+            <p>
+              Статус:
+              <Tag
+                color={card.status === 'Обработано' ? 'green' : card.status === 'Ошибка' ? 'volcano' : 'blue'}
+                style={{ marginLeft: 8, textTransform: 'uppercase', fontWeight: 'bold' }}
+              >
+                {card.status}
+              </Tag>
+            </p>
+            <p>Найдено объектов: {card.detectionsTotal ?? 0}</p>
+            <Button
+              icon={<UploadOutlined />}
+              loading={detectLoading?.[card.uuid]}
+              disabled={detectLoading?.[card.uuid]}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDetectClick(card.uuid);
+              }}
+              style={{ marginTop: 8 }}
+            >
+              Обработать
+            </Button>
           </Card>
         );
       })

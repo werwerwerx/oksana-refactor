@@ -14,8 +14,19 @@ const useMap = () => {
   const [isTilesLoading, setIsTilesLoading] = useState(false);
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+  const tileSourceCleanupRef = useRef(null);
+  const pendingTileLoadsRef = useRef(0);
+
+  const cleanupTileSourceListeners = () => {
+    if (typeof tileSourceCleanupRef.current === 'function') {
+      tileSourceCleanupRef.current();
+      tileSourceCleanupRef.current = null;
+    }
+    pendingTileLoadsRef.current = 0;
+  };
 
   const destroyMap = () => {
+    cleanupTileSourceListeners();
     if (mapRef.current) {
       mapRef.current.setTarget(null);
       mapRef.current = null;
@@ -45,8 +56,8 @@ const useMap = () => {
   const setTilesLayer = (tilesUuid, levels, tileSize = 256) => {
     const container = mapContainerRef.current;
     if (!container) return;
-    setIsTilesLoading(true);
     destroyMap();
+    setIsTilesLoading(true);
     const { width, height } = getDimsFromLevels(levels);
     const extent = [0, 0, width, height];
     const maxZoom = getMaxZoomFromLevels(levels);
@@ -55,6 +66,8 @@ const useMap = () => {
     const tileGrid = new TileGrid({ extent, tileSize, minZoom: 0, maxZoom, resolutions });
     const map = new Map({
       target: container,
+      loadTilesWhileAnimating: true,
+      loadTilesWhileInteracting: true,
       view: new View({ center: [width / 2, height / 2], zoom: 0, minZoom: 0, maxZoom, projection }),
       layers: [],
     });
@@ -75,8 +88,21 @@ const useMap = () => {
         fetch(src, { method: 'GET', headers: { Authorization: `Bearer ${token}` } })
           .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); })
           .then(blob => {
+            const image = new Image();
             const objectUrl = URL.createObjectURL(blob);
-            tile.getImage().src = objectUrl;
+            image.onload = () => {
+              if (typeof tile.setImage === 'function') {
+                tile.setImage(image);
+              } else {
+                tile.getImage().src = objectUrl;
+              }
+              URL.revokeObjectURL(objectUrl);
+            };
+            image.onerror = () => {
+              URL.revokeObjectURL(objectUrl);
+              tile.setState(3);
+            };
+            image.src = objectUrl;
           })
           .catch(() => tile.setState(3));
       },
@@ -87,18 +113,38 @@ const useMap = () => {
     map.addControl(new FullScreen());
     map.addControl(new Zoom());
     map.addLayer(tilesLayer);
-    const checkTileState = () => {
-      if (tileSource.getState() !== 'loading') {
+
+    const handleTileLoadStart = () => {
+      pendingTileLoadsRef.current += 1;
+      setIsTilesLoading(true);
+    };
+    const handleTileLoadFinish = () => {
+      pendingTileLoadsRef.current = Math.max(pendingTileLoadsRef.current - 1, 0);
+      if (pendingTileLoadsRef.current === 0) {
+        setIsTilesLoading(false);
+        tilesLayer.setVisible(true);
+      }
+    };
+
+    tileSource.on('tileloadstart', handleTileLoadStart);
+    tileSource.on('tileloadend', handleTileLoadFinish);
+    tileSource.on('tileloaderror', handleTileLoadFinish);
+
+    tileSourceCleanupRef.current = () => {
+      tileSource.un('tileloadstart', handleTileLoadStart);
+      tileSource.un('tileloadend', handleTileLoadFinish);
+      tileSource.un('tileloaderror', handleTileLoadFinish);
+    };
+
+    window.setTimeout(() => {
+      if (pendingTileLoadsRef.current === 0) {
         tilesLayer.setVisible(true);
         setIsTilesLoading(false);
       }
-    };
-    checkTileState();
-    const listenerKey = tileSource.on('change', checkTileState);
-    return () => { tileSource.un(listenerKey); map.removeLayer(tilesLayer); };
+    }, 0);
   };
 
-  return { mapContainerRef, isTilesLoading, destroyMap, setPreviewImageLayer, setTilesLayer };
+  return { mapContainerRef, mapRef, isTilesLoading, destroyMap, setPreviewImageLayer, setTilesLayer };
 };
 
 export default useMap;

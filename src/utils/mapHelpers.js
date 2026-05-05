@@ -18,6 +18,22 @@ export const getDimsFromLevels = (levels) => {
 
 export const getFallbackImageUrl = () => '/Default1.png';
 
+export const toNullableNumber = (value) => {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+};
+
+export const formatDuration = (valueMs) => {
+  const ms = toNullableNumber(valueMs);
+  if (ms === null) return '—';
+  if (ms < 1000) return `${Math.round(ms)} мс`;
+  if (ms < 60 * 1000) return `${(ms / 1000).toFixed(1).replace('.', ',')} сек`;
+
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.round((ms % 60000) / 1000);
+  return `${minutes} мин ${seconds} сек`;
+};
+
 export const viewFit = (map, extent) => {
   const view = map.getView();
   view.fit(extent, {

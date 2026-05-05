@@ -89,3 +89,94 @@ export const fetchTileStatusRequest = async (jobId, token) => {
   console.log(`Запрос к серверу: jobId=${jobId}, статус=${response.status}`);
   return response.json();
 };
+
+export const fetchStatisticsSummary = async (token) => {
+  const response = await fetch(`${API_BASE}/statistics/summary`, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    mode: 'cors',
+    cache: 'no-store',
+  });
+  const responseText = await response.text();
+  if (!response.ok) throw new Error(responseText || `Ошибка статистики: ${response.status}`);
+  return JSON.parse(responseText);
+};
+
+export const fetchDetectionsRequest = async (uuid, token) => {
+  const response = await fetch(`${API_BASE}/detections/${uuid}`, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+      'Cache-Control': 'no-cache',
+    },
+    mode: 'cors',
+    cache: 'no-store',
+  });
+
+  if (response.status === 404) {
+    return { exists: false, detections: [], detectionsTotal: 0 };
+  }
+  if (!response.ok) throw new Error(`Ошибка предразметки: ${response.status}`);
+
+  const detections = await response.json();
+  return {
+    exists: true,
+    detections,
+    detectionsTotal: Array.isArray(detections) ? detections.length : 0,
+  };
+};
+
+export const saveDetectionsRequest = async (uuid, detections, token) => {
+  const response = await fetch(`${API_BASE}/detections/${uuid}`, {
+    method: 'PUT',
+    headers: {
+      accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(detections),
+    mode: 'cors',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Ошибка сохранения разметки: ${response.status} ${errorText}`);
+  }
+};
+
+export const startDetectionRequest = async (uuid, token) => {
+  const response = await fetch(`${API_BASE}/detections/${uuid}`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'Cache-Control': 'no-cache',
+    },
+    body: JSON.stringify({ confidence: 0.6 }),
+    mode: 'cors',
+    cache: 'no-store',
+  });
+
+  if (!response.ok) throw new Error(`Ошибка отправки на предразметку: ${response.status}`);
+  return response.json();
+};
+
+export const fetchDetectionTaskStatusRequest = async (jobId, token) => {
+  const response = await fetch(`${API_BASE}/detections/tasks/${jobId}/result`, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    mode: 'cors',
+    cache: 'no-store',
+  });
+
+  if (!response.ok) throw new Error(`Ошибка статуса предразметки: ${response.status}`);
+  return response.json();
+};

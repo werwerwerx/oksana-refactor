@@ -8,8 +8,19 @@ import {
   uploadImageRequest,
   startTileBuildRequest,
   fetchTileStatusRequest,
+  fetchStatisticsSummary,
+  fetchDetectionsRequest,
+  startDetectionRequest,
+  fetchDetectionTaskStatusRequest,
 } from '../services/api';
-import { getDimsFromLevels, getFallbackImageUrl } from '../utils/mapHelpers';
+import { getFallbackImageUrl, toNullableNumber } from '../utils/mapHelpers';
+
+export const STATUS = {
+  PROCESSED: 'Обработано',
+  NOT_ANNOTATED: 'Не размечено',
+  LOADING: 'Загружается',
+  ERROR: 'Ошибка',
+};
 
 const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -21,8 +32,29 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
   const [totalCards, setTotalCards] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [deleting, setDeleting] = useState(null);
+  const [stats, setStats] = useState({ totalProjects: 0, avgTileBuildMs: null, avgDetectMs: null });
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [detectLoading, setDetectLoading] = useState({});
+  const [detectError, setDetectError] = useState(null);
 
   const selectedCard = imageCards.find(c => c.uuid === selectedUuid) ?? null;
+
+  const loadStatistics = async ({ totalProjects } = {}) => {
+    const token = localStorage.getItem('authToken');
+    setStatsLoading(true);
+    try {
+      const data = await fetchStatisticsSummary(token);
+      setStats(prev => ({
+        totalProjects: Number.isFinite(Number(totalProjects)) ? Number(totalProjects) : prev.totalProjects,
+        avgTileBuildMs: toNullableNumber(data.avg_tile_time),
+        avgDetectMs: toNullableNumber(data.avg_detect_time),
+      }));
+    } catch (error) {
+      console.error('Ошибка загрузки статистики:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   const deleteImage = async (uuid) => {
     setDeleting(uuid);
@@ -34,6 +66,9 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
         if (selectedUuid === uuid) setSelectedUuid(next.length > 0 ? next[0].uuid : null);
         return next;
       });
+      setTotalCards(prev => Math.max(prev - 1, 0));
+      setStats(prev => ({ ...prev, totalProjects: Math.max((prev.totalProjects || 0) - 1, 0) }));
+      await loadStatistics();
       setCurrentPage(prev => Math.ceil((imageCards.length - 1) / itemsPerPage) || 1);
       message.success('Изображение успешно удалено');
     } catch (error) {
@@ -53,12 +88,23 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
         data.items.map(async (item) => {
           let manifestData = null;
           let previewUrl = null;
+          let detectionData = { exists: false, detections: [], detectionsTotal: 0 };
+          try {
+            detectionData = await fetchDetectionsRequest(item.uuid, token);
+          } catch (error) {
+            console.error('Ошибка проверки предразметки:', error);
+          }
           try {
             manifestData = await fetchManifest(item.uuid, token);
             if (manifestData) previewUrl = await fetchTilePreviewUrl(item.uuid, token);
           } catch (err) {
             console.error('Manifest/preview error:', err.message);
           }
+          const status = detectionData.exists
+            ? STATUS.PROCESSED
+            : manifestData
+              ? STATUS.NOT_ANNOTATED
+              : STATUS.LOADING;
           const sizeInMB = item.size_bytes ? (item.size_bytes / (1024 * 1024)).toFixed(2) : '—';
           return {
             uuid: item.uuid,
@@ -70,16 +116,22 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
             height: item.height,
             dimensions: `${item.height} × ${item.width} px`,
             quality: '—',
-            status: 'Разбито на тайлы',
+            status,
             tileJobId: null,
             tileManifest: manifestData,
             previewUrl: previewUrl || null,
+            detections: detectionData.detections,
+            detectionsTotal: detectionData.detectionsTotal,
+            tileBuildMs: item.tile_build_ms ?? null,
+            detectMs: item.detect_ms ?? null,
           };
         })
       );
       setImageCards(cardsWithPreviews);
+      setStats(prev => ({ ...prev, totalProjects: data.total }));
       localStorage.setItem('imageCards', JSON.stringify(data.items));
       setSelectedUuid(cardsWithPreviews.length > 0 ? cardsWithPreviews[0].uuid : null);
+      await loadStatistics({ totalProjects: data.total });
     } catch (error) {
       message.error(`Не удалось загрузить карточки: ${error.message}`);
     } finally {
@@ -118,20 +170,33 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
         dimensions: `${result.height} × ${result.width} px`,
         status: 'Загружено (без тайлов)', quality: '—',
         isLoading: true, tileJobId: null, tileManifest: null,
+        detections: [], detectionsTotal: 0,
       };
       setImageCards(prev => [newCard, ...prev]);
+      setTotalCards(prev => prev + 1);
+      setStats(prev => ({ ...prev, totalProjects: prev.totalProjects + 1 }));
       setSelectedUuid(result.uuid);
       message.success('Файл успешно загружен!');
       setIsModalVisible(false);
       setLoading(false);
       const uuid = result.uuid;
-      setImageCards(prev => prev.map(c => c.uuid === uuid ? { ...c, status: 'Процесс разбивания на тайлы' } : c));
+      const tileBuildStartedAt = Date.now();
+      setImageCards(prev => prev.map(c => c.uuid === uuid ? { ...c, status: 'Подготовка' } : c));
       const jobId = await startTileBuildRequest(uuid, token);
       setImageCards(prev => prev.map(c => c.uuid === uuid ? { ...c, tileJobId: jobId } : c));
       const manifest = await pollTileStatusUntilReady(jobId, { abortFlag: { aborted: false } });
+      await loadStatistics();
+      const elapsedTileBuildMs = Date.now() - tileBuildStartedAt;
       setImageCards(prev => prev.map(c =>
         c.uuid === uuid
-          ? { ...c, status: 'Тайлы готовы', tileManifest: manifest, previewUrl: manifest.previewUrl || getFallbackImageUrl(), isLoading: false }
+          ? {
+            ...c,
+            status: STATUS.NOT_ANNOTATED,
+            tileManifest: manifest,
+            previewUrl: manifest.previewUrl || getFallbackImageUrl(),
+            isLoading: false,
+            tileBuildMs: elapsedTileBuildMs,
+          }
           : c
       ));
       setTilesLayer(manifest.uuid, manifest.levels, 256);
@@ -146,6 +211,83 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
 
   const handleCardClick = (uuid) => {
     setSelectedUuid(uuid);
+    const token = localStorage.getItem('authToken');
+    fetchDetectionsRequest(uuid, token)
+      .then(({ exists, detections, detectionsTotal }) => {
+        setImageCards(prev => prev.map(c =>
+          c.uuid === uuid
+            ? {
+              ...c,
+              detections,
+              detectionsTotal,
+              status: exists ? STATUS.PROCESSED : c.status,
+            }
+            : c
+        ));
+      })
+      .catch((error) => {
+        console.error('Ошибка загрузки предразметки:', error);
+        setImageCards(prev => prev.map(c =>
+          c.uuid === uuid ? { ...c, detectionsTotal: 0, detections: [] } : c
+        ));
+      });
+  };
+
+  const pollDetectStatusUntilReady = async (jobId, opts = {}) => {
+    const token = localStorage.getItem('authToken');
+    const { intervalMs = 1000, timeoutMs = 100 * 60 * 1000, abortFlag = { aborted: false } } = opts;
+    const startedAt = Date.now();
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    while (true) {
+      if (abortFlag?.aborted) throw new Error('Опрос предразметки прерван');
+      if (Date.now() - startedAt > timeoutMs) throw new Error('Таймаут ожидания предразметки');
+
+      const data = await fetchDetectionTaskStatusRequest(jobId, token);
+      if (data.status === 'completed') return data;
+      if (data.status === 'failed') throw new Error('Задача предразметки завершилась ошибкой');
+      await sleep(intervalMs);
+    }
+  };
+
+  const handleDetectClick = async (uuid) => {
+    setDetectLoading(prev => ({ ...prev, [uuid]: true }));
+    setDetectError(null);
+    const token = localStorage.getItem('authToken');
+    const startedAt = Date.now();
+
+    try {
+      const result = await startDetectionRequest(uuid, token);
+      const manifest = await pollDetectStatusUntilReady(result.task_id, { abortFlag: { aborted: false } });
+      const elapsedDetectMs = Date.now() - startedAt;
+      const detectionResponse = await fetchDetectionsRequest(uuid, token);
+
+      setImageCards(prev => prev.map(c =>
+        c.uuid === uuid
+          ? {
+            ...c,
+            status: STATUS.PROCESSED,
+            detectionsTotal: manifest.result?.detections_total ?? detectionResponse.detectionsTotal,
+            detectMs: elapsedDetectMs,
+            detections: detectionResponse.detections,
+          }
+          : c
+      ));
+      await loadStatistics();
+    } catch (error) {
+      console.error('Ошибка предразметки:', error);
+      setDetectError(error.message);
+      setImageCards(prev => prev.map(c =>
+        c.uuid === uuid ? { ...c, status: 'Ошибка предразметки', detectionsTotal: 0 } : c
+      ));
+      message.error(error.message || 'Не удалось выполнить предразметку');
+    } finally {
+      setDetectLoading(prev => {
+        const next = { ...prev };
+        delete next[uuid];
+        return next;
+      });
+    }
   };
 
   const handlePageChange = (page) => {
@@ -191,10 +333,10 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
 
   return {
     isModalVisible, setIsModalVisible,
-    imageCards, selectedUuid, selectedCard,
-    loading, isLoading, deleting,
+    imageCards, setImageCards, selectedUuid, selectedCard,
+    loading, isLoading, deleting, stats, statsLoading, detectLoading, detectError,
     currentPage, totalCards, itemsPerPage, setItemsPerPage,
-    deleteImage, uploadToServer, handleCardClick, handlePageChange,
+    deleteImage, uploadToServer, handleCardClick, handlePageChange, handleDetectClick,
   };
 };
 

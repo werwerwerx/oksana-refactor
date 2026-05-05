@@ -1,7 +1,20 @@
 import React from 'react';
 import AtomSpinner from '../AtomSpinner/Atom';
+import MapToolbar from '../MapToolbar';
 
-const MapArea = ({ selectedCard, mapContainerRef, isTilesLoading, onDrop }) => {
+const MapArea = ({
+  selectedCard,
+  mapContainerRef,
+  isTilesLoading,
+  onDrop,
+  annotationMode,
+  isAnnotationDirty,
+  isSavingAnnotations,
+  onDrawAnnotations,
+  onDeleteAnnotations,
+  onSaveAnnotations,
+  onCancelAnnotations,
+}) => {
   if (!selectedCard) {
     return (
       <div className="empty-state" style={{ padding: 24 }}>
@@ -27,6 +40,16 @@ const MapArea = ({ selectedCard, mapContainerRef, isTilesLoading, onDrop }) => {
           overflow: 'hidden',
           position: 'relative',
         }}
+      />
+      <MapToolbar
+        visible={Boolean(selectedCard?.tileManifest?.uuid)}
+        annotationMode={annotationMode}
+        isAnnotationDirty={isAnnotationDirty}
+        isSavingAnnotations={isSavingAnnotations}
+        onDraw={onDrawAnnotations}
+        onDelete={onDeleteAnnotations}
+        onSave={onSaveAnnotations}
+        onCancel={onCancelAnnotations}
       />
       {isTilesLoading && (
         <div style={{

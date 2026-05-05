@@ -11,23 +11,36 @@ import UploadModal from './components/UploadModal';
 
 import useMap from './hooks/useMap';
 import useCards from './hooks/useCards';
+import useMapAnnotations from './hooks/useMapAnnotations';
 
 const { Content } = Layout;
 
 const App = ({ history }) => {
-  const { mapContainerRef, isTilesLoading, destroyMap, setPreviewImageLayer, setTilesLayer } = useMap();
+  const { mapContainerRef, mapRef, isTilesLoading, destroyMap, setPreviewImageLayer, setTilesLayer } = useMap();
 
   const {
     isModalVisible, setIsModalVisible,
-    imageCards, selectedCard,
-    loading, isLoading, deleting,
+    imageCards, setImageCards, selectedCard,
+    loading, isLoading, deleting, stats, statsLoading, detectLoading,
     currentPage, totalCards, itemsPerPage, setItemsPerPage,
-    deleteImage, uploadToServer, handleCardClick, handlePageChange,
+    deleteImage, uploadToServer, handleCardClick, handlePageChange, handleDetectClick,
     selectedUuid,
   } = useCards({ setPreviewImageLayer, setTilesLayer, destroyMap });
 
+  const {
+    annotationMode,
+    isAnnotationDirty,
+    isSavingAnnotations,
+    enableDrawMode,
+    enableDeleteMode,
+    cancelAnnotationMode,
+    saveAnnotations,
+    clearAnnotationLayer,
+  } = useMapAnnotations({ mapRef, selectedCard, setImageCards });
+
   const handleLogout = () => {
     localStorage.removeItem('authToken');
+    clearAnnotationLayer();
     destroyMap();
     history.push('/login');
   };
@@ -56,6 +69,10 @@ const App = ({ history }) => {
             onPageChange={handlePageChange}
             onPageSizeChange={setItemsPerPage}
             onUploadClick={() => setIsModalVisible(true)}
+            stats={stats}
+            statsLoading={statsLoading}
+            detectLoading={detectLoading}
+            onDetectClick={handleDetectClick}
           />
           <Layout style={{ padding: '24px' }}>
             <Content>
@@ -64,6 +81,13 @@ const App = ({ history }) => {
                 mapContainerRef={mapContainerRef}
                 isTilesLoading={isTilesLoading}
                 onDrop={handleFileDrop}
+                annotationMode={annotationMode}
+                isAnnotationDirty={isAnnotationDirty}
+                isSavingAnnotations={isSavingAnnotations}
+                onDrawAnnotations={enableDrawMode}
+                onDeleteAnnotations={enableDeleteMode}
+                onSaveAnnotations={saveAnnotations}
+                onCancelAnnotations={cancelAnnotationMode}
               />
             </Content>
           </Layout>
