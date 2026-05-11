@@ -21,7 +21,7 @@ const App = ({ history }) => {
   const {
     isModalVisible, setIsModalVisible,
     imageCards, setImageCards, selectedCard,
-    loading, isLoading, deleting, stats, statsLoading, detectLoading,
+    loading, isLoading, deleting, stats, statsLoading, detectLoading, detectProgress,
     currentPage, totalCards, itemsPerPage, setItemsPerPage,
     deleteImage, uploadToServer, handleCardClick, handlePageChange, handleDetectClick,
     selectedUuid,
@@ -72,6 +72,7 @@ const App = ({ history }) => {
             stats={stats}
             statsLoading={statsLoading}
             detectLoading={detectLoading}
+            detectProgress={detectProgress}
             onDetectClick={handleDetectClick}
           />
           <Layout style={{ padding: '24px' }}>

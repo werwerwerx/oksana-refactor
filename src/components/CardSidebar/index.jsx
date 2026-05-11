@@ -2,6 +2,7 @@ import React from 'react';
 import { Layout, Button, Card, Modal, Spin, Pagination, Tag } from 'antd';
 import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import AtomSpinner from '../AtomSpinner/Atom';
+import DetectionProgressOverlay from '../DetectionProgressOverlay';
 import { formatDuration } from '../../utils/mapHelpers';
 
 const { Sider } = Layout;
@@ -22,6 +23,7 @@ const CardSidebar = ({
   stats,
   statsLoading,
   detectLoading,
+  detectProgress,
   onDetectClick,
 }) => (
   <Sider width={350} style={{ background: '#fff', overflow: 'auto' }}>
@@ -165,6 +167,7 @@ const CardSidebar = ({
                   <AtomSpinner size={80} animationDuration={1000} />
                 </div>
               )}
+              <DetectionProgressOverlay percent={detectProgress?.[card.uuid]} />
             </div>
 
             {/* Метаданные */}

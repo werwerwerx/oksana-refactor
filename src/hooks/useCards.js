@@ -35,6 +35,7 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
   const [stats, setStats] = useState({ totalProjects: 0, avgTileBuildMs: null, avgDetectMs: null });
   const [statsLoading, setStatsLoading] = useState(false);
   const [detectLoading, setDetectLoading] = useState({});
+  const [detectProgress, setDetectProgress] = useState({});
   const [detectError, setDetectError] = useState(null);
 
   const selectedCard = imageCards.find(c => c.uuid === selectedUuid) ?? null;
@@ -235,16 +236,30 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
 
   const pollDetectStatusUntilReady = async (jobId, opts = {}) => {
     const token = localStorage.getItem('authToken');
-    const { intervalMs = 1000, timeoutMs = 100 * 60 * 1000, abortFlag = { aborted: false } } = opts;
+    const {
+      intervalMs = 1000,
+      timeoutMs = 100 * 60 * 1000,
+      abortFlag = { aborted: false },
+      onProgress,
+    } = opts;
     const startedAt = Date.now();
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    const setProgress = (value) => {
+      const progress = Number(value);
+      if (!Number.isFinite(progress)) return;
+      onProgress?.(Math.min(100, Math.max(0, Math.round(progress))));
+    };
 
     while (true) {
       if (abortFlag?.aborted) throw new Error('Опрос предразметки прерван');
       if (Date.now() - startedAt > timeoutMs) throw new Error('Таймаут ожидания предразметки');
 
       const data = await fetchDetectionTaskStatusRequest(jobId, token);
-      if (data.status === 'completed') return data;
+      setProgress(data.progress_percent);
+      if (data.status === 'completed') {
+        setProgress(100);
+        return data;
+      }
       if (data.status === 'failed') throw new Error('Задача предразметки завершилась ошибкой');
       await sleep(intervalMs);
     }
@@ -252,13 +267,17 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
 
   const handleDetectClick = async (uuid) => {
     setDetectLoading(prev => ({ ...prev, [uuid]: true }));
+    setDetectProgress(prev => ({ ...prev, [uuid]: 0 }));
     setDetectError(null);
     const token = localStorage.getItem('authToken');
     const startedAt = Date.now();
 
     try {
       const result = await startDetectionRequest(uuid, token);
-      const manifest = await pollDetectStatusUntilReady(result.task_id, { abortFlag: { aborted: false } });
+      const manifest = await pollDetectStatusUntilReady(result.task_id, {
+        abortFlag: { aborted: false },
+        onProgress: progress => setDetectProgress(prev => ({ ...prev, [uuid]: progress })),
+      });
       const elapsedDetectMs = Date.now() - startedAt;
       const detectionResponse = await fetchDetectionsRequest(uuid, token);
 
@@ -274,6 +293,7 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
           : c
       ));
       await loadStatistics();
+      await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
       console.error('Ошибка предразметки:', error);
       setDetectError(error.message);
@@ -283,6 +303,11 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
       message.error(error.message || 'Не удалось выполнить предразметку');
     } finally {
       setDetectLoading(prev => {
+        const next = { ...prev };
+        delete next[uuid];
+        return next;
+      });
+      setDetectProgress(prev => {
         const next = { ...prev };
         delete next[uuid];
         return next;
@@ -334,7 +359,7 @@ const useCards = ({ setPreviewImageLayer, setTilesLayer, destroyMap }) => {
   return {
     isModalVisible, setIsModalVisible,
     imageCards, setImageCards, selectedUuid, selectedCard,
-    loading, isLoading, deleting, stats, statsLoading, detectLoading, detectError,
+    loading, isLoading, deleting, stats, statsLoading, detectLoading, detectProgress, detectError,
     currentPage, totalCards, itemsPerPage, setItemsPerPage,
     deleteImage, uploadToServer, handleCardClick, handlePageChange, handleDetectClick,
   };
