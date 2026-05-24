@@ -26,14 +26,18 @@ export const toNullableNumber = (value) => {
 export const formatDuration = (valueMs) => {
   const ms = toNullableNumber(valueMs);
   if (ms === null) return '—';
-  if (ms < 1000) return `${Math.round(ms)} мс`;
-  if (ms < 60 * 1000) return `${(ms / 1000).toFixed(1).replace('.', ',')} сек`;
+  if (ms < 1000) return `${Math.round(ms)} сек`;
+
+  // if (ms < 60 * 1000) {
+  //   return `${(ms / 1000).toFixed(1).replace('.', ',')} сек`;
+  // }
 
   const minutes = Math.floor(ms / 60000);
   const seconds = Math.round((ms % 60000) / 1000);
   return `${minutes} мин ${seconds} сек`;
 };
 
+// Функция подгонки вида под область
 export const viewFit = (map, extent) => {
   const view = map.getView();
   view.fit(extent, {

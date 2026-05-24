@@ -10,6 +10,8 @@ const MapArea = ({
   annotationMode,
   isAnnotationDirty,
   isSavingAnnotations,
+  selectedClass,
+  onSelectedClassChange,
   onDrawAnnotations,
   onDeleteAnnotations,
   onSaveAnnotations,
@@ -41,20 +43,27 @@ const MapArea = ({
           position: 'relative',
         }}
       />
+      {/* Панель разметки с выбором класса */}
       <MapToolbar
         visible={Boolean(selectedCard?.tileManifest?.uuid)}
         annotationMode={annotationMode}
         isAnnotationDirty={isAnnotationDirty}
         isSavingAnnotations={isSavingAnnotations}
+        selectedClass={selectedClass}
+        onSelectedClassChange={onSelectedClassChange}
         onDraw={onDrawAnnotations}
         onDelete={onDeleteAnnotations}
         onSave={onSaveAnnotations}
         onCancel={onCancelAnnotations}
       />
+      {/* Показываем спиннер поверх карты */}
       {isTilesLoading && (
         <div style={{
           position: 'absolute',
-          top: 0, left: 0, right: 0, bottom: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',

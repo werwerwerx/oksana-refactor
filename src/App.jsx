@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Layout, ConfigProvider } from 'antd';
 import ru from 'antd/lib/locale/ru_RU';
 import 'antd/dist/antd.css';
@@ -10,22 +10,56 @@ import MapArea from './components/MapArea';
 import UploadModal from './components/UploadModal';
 
 import useMap from './hooks/useMap';
-import useCards from './hooks/useCards';
+import useCards, { STATUS } from './hooks/useCards';
 import useMapAnnotations from './hooks/useMapAnnotations';
 
 const { Content } = Layout;
 
 const App = ({ history }) => {
-  const { mapContainerRef, mapRef, isTilesLoading, destroyMap, setPreviewImageLayer, setTilesLayer } = useMap();
+  const {
+    mapContainerRef,
+    mapRef,
+    isTilesLoading,
+    setIsTilesLoading,
+    destroyMap,
+    setPreviewImageLayer,
+    setTilesLayer,
+  } = useMap();
 
   const {
-    isModalVisible, setIsModalVisible,
-    imageCards, setImageCards, selectedCard,
-    loading, isLoading, deleting, stats, statsLoading, detectLoading, detectProgress,
-    currentPage, totalCards, itemsPerPage, setItemsPerPage,
-    deleteImage, uploadToServer, handleCardClick, handlePageChange, handleDetectClick,
+    isModalVisible,
+    setIsModalVisible,
+    imageCards,
+    setImageCards,
+    selectedCard,
+    loading,
+    isLoading,
+    deleting,
+    stats,
+    statsLoading,
+    detectLoading,
+    detectProgress,
+    isApproving,
+    currentPage,
+    totalCards,
+    itemsPerPage,
+    setItemsPerPage,
+    deleteImage,
+    uploadToServer,
+    handleCardClick,
+    handlePageChange,
+    handleDetectClick,
+    handleApproveAnnotations2,
     selectedUuid,
-  } = useCards({ setPreviewImageLayer, setTilesLayer, destroyMap });
+  } = useCards({
+    mapRef,
+    setPreviewImageLayer,
+    setTilesLayer,
+    destroyMap,
+    setIsTilesLoading,
+  });
+
+  const [selectedClass, setSelectedClass] = useState('Трек');
 
   const {
     annotationMode,
@@ -36,19 +70,36 @@ const App = ({ history }) => {
     cancelAnnotationMode,
     saveAnnotations,
     clearAnnotationLayer,
-  } = useMapAnnotations({ mapRef, selectedCard, setImageCards });
+  } = useMapAnnotations({
+    mapRef,
+    selectedCard,
+    selectedUuid,
+    imageCards,
+    setImageCards,
+  });
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    clearAnnotationLayer();
-    destroyMap();
-    history.push('/login');
+    try {
+      localStorage.removeItem('authToken');
+      // Очищаем данные карты
+      clearAnnotationLayer();
+      destroyMap();
+      // Перенаправляем на страницу входа
+      history.push('/login');
+    } catch (err) {
+      console.error('Ошибка при выходе:', err);
+    }
   };
 
+  // ==================================================================================================== //
+  // Drag & Drop
+  // ==================================================================================================== //
   const handleFileDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    if (file?.type.startsWith('image/')) uploadToServer(file);
+    if (file && file.type.startsWith('image/')) {
+      uploadToServer(file);
+    }
   };
 
   return (
@@ -59,6 +110,7 @@ const App = ({ history }) => {
           <CardSidebar
             imageCards={imageCards}
             selectedUuid={selectedUuid}
+            selectedCard={selectedCard}
             onCardClick={handleCardClick}
             onDelete={deleteImage}
             deleting={deleting}
@@ -74,6 +126,9 @@ const App = ({ history }) => {
             detectLoading={detectLoading}
             detectProgress={detectProgress}
             onDetectClick={handleDetectClick}
+            isApproving={isApproving}
+            onApproveClick={handleApproveAnnotations2}
+            statusProcessed={STATUS.PROCESSED}
           />
           <Layout style={{ padding: '24px' }}>
             <Content>
@@ -85,7 +140,9 @@ const App = ({ history }) => {
                 annotationMode={annotationMode}
                 isAnnotationDirty={isAnnotationDirty}
                 isSavingAnnotations={isSavingAnnotations}
-                onDrawAnnotations={enableDrawMode}
+                selectedClass={selectedClass}
+                onSelectedClassChange={setSelectedClass}
+                onDrawAnnotations={() => enableDrawMode(selectedClass)}
                 onDeleteAnnotations={enableDeleteMode}
                 onSaveAnnotations={saveAnnotations}
                 onCancelAnnotations={cancelAnnotationMode}

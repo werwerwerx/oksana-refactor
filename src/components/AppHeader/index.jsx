@@ -10,10 +10,11 @@ const AppHeader = ({ onLogout }) => (
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '0 24px',
-    backgroundColor: '#fff',
+    backgroundColor: '#fff', // Если нужен светлый фон
     boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
   }}>
     <div className="title-container">Tracks</div>
+    {/* Кнопка выхода в правом углу */}
     <Button
       type="primary"
       icon={<PoweroffOutlined />}

@@ -1,5 +1,7 @@
 const API_BASE = '';
 
+export { API_BASE };
+
 export const deleteImageRequest = async (uuid, token) => {
   const response = await fetch(`${API_BASE}/ingest/${uuid}`, {
     method: 'DELETE',
@@ -9,15 +11,23 @@ export const deleteImageRequest = async (uuid, token) => {
   if (!response.ok) throw new Error(`Не удалось удалить изображение: ${response.statusText}`);
 };
 
+// Функция для загрузки превью-тайла
 export const fetchTilePreviewUrl = async (uuid, token) => {
-  const response = await fetch(`${API_BASE}/tiles/${uuid}/preview`, {
-    method: 'GET',
-    headers: { 'Authorization': `Bearer ${token}` },
-    mode: 'cors',
-  });
-  if (!response.ok) throw new Error(`Failed to fetch tile preview for ${uuid}: ${response.status}`);
-  const blob = await response.blob();
-  return URL.createObjectURL(blob);
+  try {
+    const response = await fetch(`${API_BASE}/tiles/${uuid}/preview`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+      mode: 'cors',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch tile preview for ${uuid}: ${response.status}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    console.error('Error fetching tile preview:', error.message);
+    return null;
+  }
 };
 
 export const fetchCardsMetadata = async (token, currentPage, itemsPerPage) => {
@@ -57,6 +67,9 @@ export const uploadImageRequest = async (file, token) => {
   return response.json();
 };
 
+// ==================================================================================================== //
+// ЗАПУСКАЕТ ПОСТРОЕНИЕ ТАЙЛОВ
+// ==================================================================================================== //
 export const startTileBuildRequest = async (uuid, token) => {
   const url = `${API_BASE}/tiles/${uuid}/build?tile_size=256&fmt=webp&lossless=false`;
   const response = await fetch(url, {
@@ -149,7 +162,7 @@ export const saveDetectionsRequest = async (uuid, detections, token) => {
 };
 
 export const startDetectionRequest = async (uuid, token) => {
-  const response = await fetch(`${API_BASE}/detections/${uuid}`, {
+  const response = await fetch(`${API_BASE}/detections/${uuid}/detect`, {
     method: 'POST',
     headers: {
       accept: 'application/json',
@@ -163,6 +176,63 @@ export const startDetectionRequest = async (uuid, token) => {
   });
 
   if (!response.ok) throw new Error(`Ошибка отправки на предразметку: ${response.status}`);
+  return response.json();
+};
+
+export const fetchDetectionExportRequest = async (uuid, token) => {
+  const response = await fetch(`${API_BASE}/detections/${uuid}/export`, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    mode: 'cors',
+  });
+  if (!response.ok) {
+    throw new Error(`Ошибка запуска задачи отправки на проверку разметки: ${response.status}`);
+  }
+  return response.json();
+};
+
+export const fetchExportTaskStatusRequest = async (taskId, token) => {
+  const response = await fetch(`${API_BASE}/detections/export/tasks/${taskId}`, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    mode: 'cors',
+  });
+  return response.json();
+};
+
+export const startApproveTestRequest = async (uuid, token) => {
+  const response = await fetch(`${API_BASE}/detections/9876test/${uuid}`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    mode: 'cors',
+  });
+  if (!response.ok) {
+    throw new Error(`Ошибка запуска задачи отправки на проверку разметки: ${response.status}`);
+  }
+  return response.json();
+};
+
+export const fetchDetectionsRaw = async (uuid, token) => {
+  const response = await fetch(`${API_BASE}/detections/${uuid}`, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+      'Cache-Control': 'no-cache',
+    },
+    mode: 'cors',
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`Ошибка загрузки detections: ${response.status}`);
   return response.json();
 };
 
