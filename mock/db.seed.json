@@ -1,0 +1,89 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "demo",
+      "password": "demo"
+    }
+  ],
+  "images": [
+    {
+      "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "plate_sample.webp",
+      "last_updated": "2026-05-20T10:00:00.000Z",
+      "format": "webp",
+      "size_bytes": 2048000,
+      "width": 4096,
+      "height": 3072,
+      "tile_build_ms": 3500,
+      "detect_ms": 12000
+    },
+    {
+      "uuid": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "plate_empty.webp",
+      "last_updated": "2026-05-21T14:30:00.000Z",
+      "format": "webp",
+      "size_bytes": 1536000,
+      "width": 2048,
+      "height": 1536,
+      "tile_build_ms": 2100,
+      "detect_ms": null
+    }
+  ],
+  "manifests": [
+    {
+      "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "levels": {
+        "0": {
+          "width": 4096,
+          "height": 3072,
+          "tiles_x": 16,
+          "tiles_y": 12
+        },
+        "1": {
+          "width": 8192,
+          "height": 6144,
+          "tiles_x": 32,
+          "tiles_y": 24
+        }
+      }
+    },
+    {
+      "uuid": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "levels": {
+        "0": {
+          "width": 2048,
+          "height": 1536,
+          "tiles_x": 8,
+          "tiles_y": 6
+        }
+      }
+    }
+  ],
+  "detections": [
+    {
+      "imageUuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "items": [
+        {
+          "id": "det-1",
+          "bbox_global": [320, 480, 520, 680],
+          "source": "predicted"
+        },
+        {
+          "id": "det-2",
+          "bbox_global": [1200, 900, 1380, 1080],
+          "source": "predicted"
+        },
+        {
+          "id": "det-3",
+          "bbox_global": [2100, 1500, 2280, 1680],
+          "source": "predicted"
+        }
+      ]
+    }
+  ],
+  "statistics": {
+    "avg_tile_time": 2800,
+    "avg_detect_time": 11500
+  }
+}
