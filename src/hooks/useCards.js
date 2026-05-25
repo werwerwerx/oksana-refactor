@@ -258,8 +258,16 @@ const useCards = ({
     const { intervalMs = 1000, timeoutMs = 10 * 60 * 1000, abortFlag = { aborted: false } } = opts;
     const startedAt = Date.now();
 
-    // Вспомогательная функция для задержки
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const fetchPreviewWithRetry = async (uuid, maxAttempts = 10, intervalMs = 1000) => {
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        const previewUrl = await fetchTilePreviewUrl(uuid, token);
+        if (previewUrl) return previewUrl;
+        if (attempt < maxAttempts - 1) await sleep(intervalMs);
+      }
+      return null;
+    };
 
     while (true) {
       // Проверка флага прерывания
@@ -270,10 +278,9 @@ const useCards = ({
       const data = await fetchTileStatusRequest(jobId, token);
       // Проверяем, готовы ли тайлы
       if (data?.levels && data?.uuid) {
-        const previewUrl = await fetchTilePreviewUrl(data.uuid, token);
+        const previewUrl = await fetchPreviewWithRetry(data.uuid);
         setIsTilesLoading(false);
 
-        // Возвращаем данные с превью
         return { ...data, previewUrl };
       }
 
@@ -289,8 +296,10 @@ const useCards = ({
     console.log('uploadToServer');
     const token = localStorage.getItem('authToken');
     setLoading(true);
+    let uploadUuid = null;
     try {
       const result = await uploadImageRequest(file, token);
+      uploadUuid = result.uuid;
       const sizeInMB = result.size_bytes ? (result.size_bytes / (1024 * 1024)).toFixed(2) : '—';
 
       // Формируем данные карточки
@@ -334,7 +343,7 @@ const useCards = ({
 
       // Запускаем построение тайлов
       const jobId = await startTileBuildRequest(uuid, token);
-      // setIsTilesLoading(true);
+      setIsTilesLoading(true);
       setImageCards((prev) => prev.map((c) => (c.uuid === uuid ? { ...c, tileJobId: jobId } : c)));
 
       const abortFlag = { aborted: false };
@@ -356,6 +365,7 @@ const useCards = ({
               tileManifest: manifest,
               previewUrl: manifest.previewUrl,
               isLoading: false,
+              tileJobId: null,
               tileBuildMs: elapsedTileBuildMs,
             }
             : c
@@ -364,11 +374,19 @@ const useCards = ({
 
       setTilesLayer(manifest.uuid, manifest.levels, 256);
       setIsTilesLoading(false);
-      setCurrentPage(1); // Возвращаемся на первую страницу, чтобы новая карточка была видна
-      setSelectedUuid(result.uuid); // Выбираем новое изображение
+      if (currentPage !== 1) setCurrentPage(1);
+      setSelectedUuid(result.uuid);
     } catch (e) {
       console.error(e);
       message.error(`Не удалось загрузить файл: ${e.message}`);
+      setImageCards((prev) =>
+        prev.map((c) =>
+          c.uuid === uploadUuid
+            ? { ...c, status: STATUS.ERROR, isLoading: false, tileJobId: null }
+            : c
+        )
+      );
+      setIsTilesLoading(false);
     } finally {
       setLoading(false);
     }

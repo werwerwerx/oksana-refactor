@@ -84,6 +84,7 @@ const CardSidebar = ({
     {imageCards.length > 0 ? (
       imageCards.map((card) => {
         const hasTiles = card.tileManifest;
+        const isPreviewLoading = card.isLoading || card.tileJobId;
         return (
           <Card
             key={card.uuid}
@@ -244,7 +245,7 @@ const CardSidebar = ({
               >
                 {hasTiles ? (
                   <>
-                    {(isLoading || !card.previewUrl) && (
+                    {(isPreviewLoading || !card.previewUrl) && (
                       <div
                         style={{
                           width: '100%',
@@ -276,7 +277,7 @@ const CardSidebar = ({
                       />
                     ) : null}
                   </>
-                ) : (
+                ) : isPreviewLoading ? (
                   <div
                     style={{
                       width: '100%',
@@ -291,6 +292,16 @@ const CardSidebar = ({
                   >
                     <AtomSpinner size={60} animationDuration={1000} />
                   </div>
+                ) : (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: 150,
+                      background: '#f5f5f5',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: 8,
+                    }}
+                  />
                 )}
               </div>
             </div>
