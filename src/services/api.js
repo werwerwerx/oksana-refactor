@@ -108,6 +108,7 @@ export const fetchTileStatusRequest = async (jobId, token) => {
     mode: 'cors',
     cache: 'no-store',
   });
+  console.log(`Запрос к серверу: jobId=${jobId}, статус=${response.status}`);
   const data = await response.json();
   console.debug('[fetchTileStatusRequest]', {
     jobId,

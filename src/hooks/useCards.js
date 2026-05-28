@@ -283,7 +283,9 @@ const useCards = ({
     };
 
     while (true) {
+      // Проверка флага прерывания
       if (abortFlag?.aborted) throw new Error('Опрос тайлов прерван');
+      // Проверка таймаута
       if (Date.now() - startedAt > timeoutMs) throw new Error('Таймаут ожидания готовности тайлов');
 
       const data = await fetchTileStatusRequest(jobId, token);
@@ -296,6 +298,7 @@ const useCards = ({
         hasLevels: Boolean(data?.levels),
       });
 
+      // Проверяем, готовы ли тайлы
       const manifest = await resolveManifest(data);
       if (manifest) {
         const previewUrl = await fetchPreviewWithRetry(manifest.uuid);
@@ -309,6 +312,7 @@ const useCards = ({
         return { ...manifest, previewUrl };
       }
 
+      // Ждём перед следующим запросом
       await sleep(intervalMs);
     }
   };
@@ -382,7 +386,8 @@ const useCards = ({
         hasLevels: Boolean(manifest?.levels),
         previewUrl: Boolean(manifest?.previewUrl),
       });
-
+      // После успешного разбиения backend уже обновил статистику,
+      // поэтому заново забираем среднее время тайлинга.
       await loadStatistics();
 
       const elapsedTileBuildMs = Date.now() - tileBuildStartedAt;
