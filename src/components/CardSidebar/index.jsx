@@ -83,8 +83,24 @@ const CardSidebar = ({
 
     {imageCards.length > 0 ? (
       imageCards.map((card) => {
-        const hasTiles = card.tileManifest;
-        const isPreviewLoading = card.isLoading || card.tileJobId;
+        const hasTiles = Boolean(card.tileManifest?.uuid && card.tileManifest?.levels);
+        const isPreviewLoading = Boolean(card.isLoading || card.tileJobId);
+        const showPreviewImage = hasTiles && Boolean(card.previewUrl) && !isPreviewLoading;
+        const showPreviewSpinner = hasTiles
+          ? isPreviewLoading || !card.previewUrl
+          : isPreviewLoading;
+
+        console.debug('[CardSidebar preview]', {
+          uuid: card.uuid,
+          hasTiles,
+          isPreviewLoading,
+          showPreviewSpinner,
+          showPreviewImage,
+          previewUrl: Boolean(card.previewUrl),
+          tileManifestUuid: card.tileManifest?.uuid,
+          tileJobId: card.tileJobId,
+        });
+
         return (
           <Card
             key={card.uuid}
@@ -245,7 +261,7 @@ const CardSidebar = ({
               >
                 {hasTiles ? (
                   <>
-                    {(isPreviewLoading || !card.previewUrl) && (
+                    {showPreviewSpinner && (
                       <div
                         style={{
                           width: '100%',
@@ -262,7 +278,7 @@ const CardSidebar = ({
                       </div>
                     )}
                     <DetectionProgressOverlay percent={detectProgress?.[card.uuid]} />
-                    {card.previewUrl ? (
+                    {showPreviewImage ? (
                       <img
                         src={card.previewUrl}
                         alt="Превью"
@@ -277,7 +293,7 @@ const CardSidebar = ({
                       />
                     ) : null}
                   </>
-                ) : isPreviewLoading ? (
+                ) : showPreviewSpinner ? (
                   <div
                     style={{
                       width: '100%',

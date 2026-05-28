@@ -180,6 +180,7 @@ server.post('/tiles/:uuid/build', requireAuth, (req, res) => {
 });
 
 server.get('/tiles/:jobId/result', requireAuth, (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const job = tileJobs.get(req.params.jobId);
   if (job) {
     if (Date.now() < job.readyAt) {

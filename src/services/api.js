@@ -16,8 +16,12 @@ export const fetchTilePreviewUrl = async (uuid, token) => {
   try {
     const response = await fetch(`${API_BASE}/tiles/${uuid}/preview`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Cache-Control': 'no-cache',
+      },
       mode: 'cors',
+      cache: 'no-store',
     });
     if (!response.ok) {
       throw new Error(`Failed to fetch tile preview for ${uuid}: ${response.status}`);
@@ -96,11 +100,24 @@ export const startTileBuildRequest = async (uuid, token) => {
 export const fetchTileStatusRequest = async (jobId, token) => {
   const response = await fetch(`${API_BASE}/tiles/${jobId}/result`, {
     method: 'GET',
-    headers: { accept: 'application/json', Authorization: `Bearer ${token}` },
+    headers: {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+      'Cache-Control': 'no-cache',
+    },
     mode: 'cors',
+    cache: 'no-store',
   });
   console.log(`Запрос к серверу: jobId=${jobId}, статус=${response.status}`);
-  return response.json();
+  const data = await response.json();
+  console.debug('[fetchTileStatusRequest]', {
+    jobId,
+    httpStatus: response.status,
+    hasUuid: Boolean(data?.uuid),
+    hasLevels: Boolean(data?.levels),
+    status: data?.status,
+  });
+  return data;
 };
 
 export const fetchStatisticsSummary = async (token) => {
