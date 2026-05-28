@@ -255,36 +255,60 @@ const useCards = ({
   // ==================================================================================================== //
   const pollTileStatusUntilReady = async (jobId, opts = {}) => {
     const token = localStorage.getItem('authToken');
-    const { intervalMs = 1000, timeoutMs = 10 * 60 * 1000, abortFlag = { aborted: false } } = opts;
+    const { intervalMs = 1000, timeoutMs = 30 * 1000, abortFlag = { aborted: false } } = opts;
     const startedAt = Date.now();
 
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-    const fetchPreviewWithRetry = async (uuid, maxAttempts = 10, intervalMs = 1000) => {
+    const fetchPreviewWithRetry = async (uuid, maxAttempts = 10, retryIntervalMs = 1000) => {
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const previewUrl = await fetchTilePreviewUrl(uuid, token);
         if (previewUrl) return previewUrl;
-        if (attempt < maxAttempts - 1) await sleep(intervalMs);
+        if (attempt < maxAttempts - 1) await sleep(retryIntervalMs);
+      }
+      return null;
+    };
+
+    const resolveManifest = async (data) => {
+      if (data?.levels && data?.uuid) return data;
+      if (data?.uuid) {
+        try {
+          const manifest = await fetchManifest(data.uuid, token);
+          if (manifest?.levels && manifest?.uuid) return manifest;
+        } catch (error) {
+          console.debug('[pollTileStatusUntilReady] manifest fallback failed', error);
+        }
       }
       return null;
     };
 
     while (true) {
-      // Проверка флага прерывания
       if (abortFlag?.aborted) throw new Error('Опрос тайлов прерван');
-      // Проверка таймаута
       if (Date.now() - startedAt > timeoutMs) throw new Error('Таймаут ожидания готовности тайлов');
 
       const data = await fetchTileStatusRequest(jobId, token);
-      // Проверяем, готовы ли тайлы
-      if (data?.levels && data?.uuid) {
-        const previewUrl = await fetchPreviewWithRetry(data.uuid);
-        setIsTilesLoading(false);
+      const elapsedMs = Date.now() - startedAt;
+      console.debug('[pollTileStatusUntilReady]', {
+        jobId,
+        elapsedMs,
+        status: data?.status,
+        hasUuid: Boolean(data?.uuid),
+        hasLevels: Boolean(data?.levels),
+      });
 
-        return { ...data, previewUrl };
+      const manifest = await resolveManifest(data);
+      if (manifest) {
+        const previewUrl = await fetchPreviewWithRetry(manifest.uuid);
+        console.debug('[pollTileStatusUntilReady] ready', {
+          jobId,
+          uuid: manifest.uuid,
+          levelsKeys: manifest.levels ? Object.keys(manifest.levels) : [],
+          previewUrl: Boolean(previewUrl),
+        });
+        setIsTilesLoading(false);
+        return { ...manifest, previewUrl };
       }
 
-      // Ждём перед следующим запросом
       await sleep(intervalMs);
     }
   };
@@ -351,13 +375,19 @@ const useCards = ({
 
       // Ожидаем готовности
       const manifest = await pollTileStatusUntilReady(jobId, { abortFlag });
-      // После успешного разбиения backend уже обновил статистику,
-      // поэтому заново забираем среднее время тайлинга.
+      console.debug('[uploadToServer] pollTileStatusUntilReady done', {
+        uuid,
+        jobId,
+        tileManifestUuid: manifest?.uuid,
+        hasLevels: Boolean(manifest?.levels),
+        previewUrl: Boolean(manifest?.previewUrl),
+      });
+
       await loadStatistics();
 
       const elapsedTileBuildMs = Date.now() - tileBuildStartedAt;
-      setImageCards((prev) =>
-        prev.map((c) =>
+      setImageCards((prev) => {
+        const next = prev.map((c) =>
           c.uuid === uuid
             ? {
               ...c,
@@ -365,12 +395,22 @@ const useCards = ({
               tileManifest: manifest,
               previewUrl: manifest.previewUrl,
               isLoading: false,
+              isTilesLoading: false,
               tileJobId: null,
               tileBuildMs: elapsedTileBuildMs,
             }
             : c
-        )
-      );
+        );
+        const updated = next.find((c) => c.uuid === uuid);
+        console.debug('[uploadToServer] newCard after manifest', {
+          uuid,
+          tileManifest: updated?.tileManifest,
+          previewUrl: Boolean(updated?.previewUrl),
+          isLoading: updated?.isLoading,
+          tileJobId: updated?.tileJobId,
+        });
+        return next;
+      });
 
       setTilesLayer(manifest.uuid, manifest.levels, 256);
       setIsTilesLoading(false);
